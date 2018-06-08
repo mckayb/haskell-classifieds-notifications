@@ -1,0 +1,27 @@
+name:                haskell-classifieds-notifications
+version:             0.1.0.0
+#synopsis:
+#description:
+homepage:            https://github.com/githubuser/haskell-classifieds-notifications#readme
+license:             BSD3
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2018 Author name here
+category:            Web
+extra-source-files:
+- README.md
+
+default-extensions:
+  - OverloadedStrings
+
+dependencies:
+  - base >= 4.7 && < 5
+  - wreq
+  - lens
+  - text
+  - bytestring
+
+executables:
+  haskell-classifieds-notifications:
+    source-dirs:      src
+    main:             Main.hs
