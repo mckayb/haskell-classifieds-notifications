@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9dd41a72c4fb0188c09234257ba8e8dba39a90eabc7e373b2c521452665edd25
+-- hash: 1501af28cff288d48242777a9234f2870ed440b92bf1202bddb109f8575bcdfb
 
 name:           haskell-classifieds-notifications
 version:        0.1.0.0
@@ -24,11 +24,11 @@ executable haskell-classifieds-notifications
       Paths_haskell_classifieds_notifications
   hs-source-dirs:
       src
-  default-extensions: OverloadedStrings
   build-depends:
       base >=4.7 && <5
     , bytestring
     , lens
+    , tagsoup
     , text
     , wreq
   default-language: Haskell2010

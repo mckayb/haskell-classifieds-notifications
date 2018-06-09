@@ -11,15 +11,13 @@ category:            Web
 extra-source-files:
 - README.md
 
-default-extensions:
-  - OverloadedStrings
-
 dependencies:
   - base >= 4.7 && < 5
   - wreq
   - lens
   - text
   - bytestring
+  - tagsoup
 
 executables:
   haskell-classifieds-notifications:
