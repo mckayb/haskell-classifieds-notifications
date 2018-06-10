@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1501af28cff288d48242777a9234f2870ed440b92bf1202bddb109f8575bcdfb
+-- hash: edb0fa4988a68d33c5e8e0a3e4fc647cdcc7cce2cba9256a34027ba059492fdb
 
 name:           haskell-classifieds-notifications
 version:        0.1.0.0
@@ -21,11 +21,13 @@ extra-source-files:
 executable haskell-classifieds-notifications
   main-is: Main.hs
   other-modules:
+      Types.KSL
       Paths_haskell_classifieds_notifications
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      aeson
+    , base >=4.7 && <5
     , bytestring
     , lens
     , tagsoup

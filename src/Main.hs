@@ -7,11 +7,12 @@ import Control.Concurrent (threadDelay)
 import Data.Semigroup ((<>))
 import Data.List (find)
 import Data.Text (Text, pack)
--- import Data.ByteString (ByteString, writeFile)
-import qualified Data.ByteString.Char8 (ByteString, takeWhile, dropWhile, isInfixOf, pack)
-import Data.ByteString.Lazy (toStrict)
+import Data.Aeson (decode)
+import qualified Data.ByteString.Char8 (ByteString, takeWhile, dropWhile, isInfixOf, init, pack)
+import Data.ByteString.Lazy (fromStrict, toStrict)
 import Network.Wreq (getWith, defaults, param, responseBody)
 import Text.HTML.TagSoup (Tag(TagText), maybeTagText, parseTags, partitions, isTagText, (~==))
+import Types.KSL (KSLListing)
 
 newtype SearchTerm = SearchTerm Text
   deriving (Show, Eq)
@@ -39,8 +40,12 @@ handleSites KSL (SearchTerm s) = do
       -- writeFile "results/ksl.html" $ toStrict body
       let listingTagText = find (\x -> isTagText x && isListingsTag x) $ parseTags (toStrict body)
       let maybeListingText = maybeTagText =<< listingTagText
-      let maybeListingsJson = fmap ((<> Data.ByteString.Char8.pack "]") . Data.ByteString.Char8.takeWhile (/= ']') . Data.ByteString.Char8.dropWhile (/= '[')) maybeListingText
-      print maybeListingsJson
+      let maybeListingsJson = fmap ( Data.ByteString.Char8.init 
+                                   . Data.ByteString.Char8.takeWhile (/= '\n') 
+                                   . Data.ByteString.Char8.dropWhile (/= '[')
+                                   ) maybeListingText
+      let mListings = (decode =<< fmap fromStrict maybeListingsJson) :: Maybe [KSLListing]
+      print mListings
     Nothing -> putStrLn "Couldn't find response body!"
 
 handleSites FacebookMarketplace (SearchTerm s) = putStrLn "Checking Facebook Marketplace"
