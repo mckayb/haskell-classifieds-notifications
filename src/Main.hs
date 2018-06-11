@@ -21,7 +21,7 @@ import Types.Ksl (Listing)
 import Configuration.Dotenv (loadFile)
 import Configuration.Dotenv.Types (defaultConfig)
 import System.Environment (lookupEnv)
-import System.Exit (exitFailure)
+import System.Exit (exitFailure, exitSuccess)
 import Network.SendGridV3.Api (ApiKey(ApiKey) , MailAddress(MailAddress) , Mail , sendMail , personalization , mail , mailContentText)
 import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
@@ -103,7 +103,7 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   -- Collect the diff listings into email content
   liftIO $ putStrLn "New Ksl Listings: "
   liftIO $ print $ diffListings Ksl oldKslListings newKslListings
-  statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr "This is the content")
+  -- statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr "This is the content")
 
   put $ unions [ singleton Ksl newKslListings
                , singleton FacebookMarketplace newFbmpListings
@@ -131,14 +131,14 @@ main = do
   let combine key pn = [key, fmap (<> "@txt.att.net") pn]
   vars <- lookupEnv "SENDGRID_API_KEY" >>= (\key -> combine key <$> lookupEnv "PHONE_NUMBER")
   let env = fmap pack <$> sequence vars
-  _ <- case env of
-      Nothing -> do
-        putStrLn "Environment not set properly."
-        exitFailure
-      Just [apiKey, email] ->
-        let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder")
-        in runStateT (getListings massagedEnv) initialState
-      Just _ -> do
-        putStrLn "Environment not set properly."
-        exitFailure
-  pure ()
+  case env of
+    Nothing -> do
+      putStrLn "Environment not set properly."
+      exitFailure
+    Just [apiKey, email] -> do
+      let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder")
+      _ <- runStateT (getListings massagedEnv) initialState
+      exitSuccess
+    Just _ -> do
+      putStrLn "Environment not set properly."
+      exitFailure
