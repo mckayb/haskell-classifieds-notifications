@@ -51,7 +51,6 @@ handleSites Ksl (SearchTerm s) = do
   let maybeBody = r ^? responseBody
   case maybeBody of
     Just body -> do
-      -- let isListingsTag (TagText t) = Data.ByteString.Char8.pack "renderSearchSection" `Data.ByteString.Char8.isInfixOf` t
       let listingTagText = find (\x -> isTagText x && isListingsTag x) $ parseTags (toStrict body)
       let maybeListingText = maybeTagText =<< listingTagText
       let maybeListingsJson = fmap ( Data.ByteString.Char8.init 
