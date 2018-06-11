@@ -1,14 +1,12 @@
-{-# LANGUAGE DeriveGeneric #-}
+module Types.Ksl where
 
-module Types.KSL where
-
-import Prelude
+import Prelude (Int, Float, Maybe, Show, Eq, Ord, Ordering(LT), Bool(True), compare, (==), (&&))
+import Control.Applicative ((<|>))
 import GHC.Generics (Generic)
 import Data.Aeson (FromJSON)
 import Data.Text (Text)
 
-{-# ANN KSLListing "HLint: ignore" #-}
-data KSLListing = KSLListing
+data Listing = KslListing
   { id :: Int
   , memberId :: Int
   , createTime :: Text
@@ -39,6 +37,16 @@ data KSLListing = KSLListing
   , listingType :: Text
   , source :: Text
   , contentType :: Text
-  } deriving (Show, Eq, Generic)
+  } deriving (Show, Generic)
 
-instance FromJSON KSLListing
+instance Eq Listing where
+  (==) (KslListing _ _ _ _ _ _ _ _ priceA titleA descA marketTypeA cityA _ stateA zipA nameA homePhoneA _ _ _ _ _ _ _ _ _ _ _ _)
+       (KslListing _ _ _ _ _ _ _ _ priceB titleB descB marketTypeB cityB _ stateB zipB nameB homePhoneB _ _ _ _ _ _ _ _ _ _ _ _)
+       = priceA == priceB && titleA == titleB && descA == descB && marketTypeA == marketTypeB && cityA == cityB
+         && stateA == stateB && zipA == zipB && nameA == nameB && homePhoneA == homePhoneB
+
+instance Ord Listing where
+  compare (KslListing _ _ _ _ _ _ _ _ _ titleA _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+          (KslListing _ _ _ _ _ _ _ _ _ titleB _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = titleA `compare` titleB
+
+instance FromJSON Listing

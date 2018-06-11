@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: edb0fa4988a68d33c5e8e0a3e4fc647cdcc7cce2cba9256a34027ba059492fdb
+-- hash: b9a678e9b9f05dc117734ea6c54b3a555e6521051425d94a290c3880d8dee62b
 
 name:           haskell-classifieds-notifications
 version:        0.1.0.0
@@ -21,16 +21,23 @@ extra-source-files:
 executable haskell-classifieds-notifications
   main-is: Main.hs
   other-modules:
-      Types.KSL
+      Types.Ksl
       Paths_haskell_classifieds_notifications
   hs-source-dirs:
       src
+  default-extensions: NoImplicitPrelude OverloadedStrings ApplicativeDo DeriveGeneric
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wmissing-import-lists
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
+    , dotenv
+    , hashable
     , lens
+    , sendgrid-v3
     , tagsoup
     , text
+    , transformers
+    , unordered-containers
     , wreq
   default-language: Haskell2010

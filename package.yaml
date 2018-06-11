@@ -11,6 +11,20 @@ category:            Web
 extra-source-files:
 - README.md
 
+default-extensions:
+  - NoImplicitPrelude
+  - OverloadedStrings
+  - ApplicativeDo
+  - DeriveGeneric
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+  - -Wmissing-import-lists
+
 dependencies:
   - base >= 4.7 && < 5
   - wreq
@@ -19,6 +33,11 @@ dependencies:
   - bytestring
   - tagsoup
   - aeson
+  - transformers
+  - unordered-containers
+  - sendgrid-v3
+  - dotenv
+  - hashable
 
 executables:
   haskell-classifieds-notifications:
