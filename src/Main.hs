@@ -65,18 +65,15 @@ handleSites Ksl (SearchTerm s) = do
       pure []
 
 handleSites FacebookMarketplace (SearchTerm s) = do
-  print s
-  putStrLn "Checking Facebook Marketplace"
+  print $ "Checking Facebook Marketplace: " <> s
   pure []
 
 handleSites LetGo (SearchTerm s) = do
-  print s
-  putStrLn "Checking LetGo"
+  print $ "Checking LetGo: " <> s
   pure []
 
 handleSites OfferUp (SearchTerm s) = do
-  print s
-  putStrLn "Checking OfferUp"
+  print $ "Checking OfferUp: " <> s
   pure []
 
 createMail :: MailAddress -> Text -> Mail () ()
@@ -87,11 +84,7 @@ diffListings :: Site -> [Listing] -> [Listing] -> [Listing]
 -- If one of these is empty, then something has gone wrong, or it's the first call, so we can't get a good diff
 diffListings _ [] _ = []
 diffListings _ _ [] = []
-
 diffListings _ a b = b \\ a
--- diffListings FacebookMarketplace a b = b \\ a
--- diffListings OfferUp a b = b \\ a
--- diffListings LetGo a b = b \\ a
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
@@ -107,10 +100,10 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   newOuListings <- liftIO $ handleSites OfferUp $ SearchTerm "arcade"
   newLgListings <- liftIO $ handleSites LetGo $ SearchTerm "arcade"
 
-  -- Compare the two here
+  -- Collect the diff listings into email content
+  liftIO $ putStrLn "New Ksl Listings: "
   liftIO $ print $ diffListings Ksl oldKslListings newKslListings
-  -- liftIO $ print statusCode
-  -- statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr "This is the content")
+  statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr "This is the content")
 
   put $ unions [ singleton Ksl newKslListings
                , singleton FacebookMarketplace newFbmpListings
@@ -119,6 +112,8 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
                ]
 
   let oneSecond = 1000000
+
+  -- Check every 30 seconds
   liftIO $ threadDelay $ oneSecond * 30
 
 initialState :: ListingsMap

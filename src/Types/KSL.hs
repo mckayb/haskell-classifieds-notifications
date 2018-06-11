@@ -45,8 +45,8 @@ instance Eq Listing where
        = priceA == priceB && titleA == titleB && descA == descB && marketTypeA == marketTypeB && cityA == cityB
          && stateA == stateB && zipA == zipB && nameA == nameB && homePhoneA == homePhoneB
 
-instance Ord Listing where
-  compare (KslListing _ _ _ _ _ _ _ _ _ titleA _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
-          (KslListing _ _ _ _ _ _ _ _ _ titleB _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = titleA `compare` titleB
+-- instance Ord Listing where
+  -- compare (KslListing _ _ _ _ _ _ _ _ _ titleA _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _)
+          -- (KslListing _ _ _ _ _ _ _ _ _ titleB _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = titleA `compare` titleB
 
 instance FromJSON Listing
