@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, print, putStrLn, pure, sequence, fmap, (<$>), ($), (>>=), (*), (=<<), (/=), (.), (&&))
+import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, print, putStrLn, pure, sequence, fmap, foldr, show, (<$>), ($), (>>=), (*), (=<<), (/=), (.), (&&))
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever)
 import Control.Monad.IO.Class (liftIO)
@@ -17,9 +17,7 @@ import qualified Data.ByteString.Char8 (ByteString, takeWhile, dropWhile, isInfi
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Network.Wreq (getWith, defaults, param, responseBody)
 import Text.HTML.TagSoup (Tag(TagText), maybeTagText, parseTags, isTagText)
-import Types.Ksl (Listing)
-import Configuration.Dotenv (loadFile)
-import Configuration.Dotenv.Types (defaultConfig)
+import Types.Ksl (Listing(KslListing))
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure, exitSuccess)
 import Network.SendGridV3.Api (ApiKey(ApiKey) , MailAddress(MailAddress) , Mail , sendMail , personalization , mail , mailContentText)
@@ -64,15 +62,15 @@ handleSites Ksl (SearchTerm s) = do
       pure []
 
 handleSites FacebookMarketplace (SearchTerm s) = do
-  print $ "Checking Facebook Marketplace: " <> s
+  -- print $ "Checking Facebook Marketplace: " <> s
   pure []
 
 handleSites LetGo (SearchTerm s) = do
-  print $ "Checking LetGo: " <> s
+  -- print $ "Checking LetGo: " <> s
   pure []
 
 handleSites OfferUp (SearchTerm s) = do
-  print $ "Checking OfferUp: " <> s
+  -- print $ "Checking OfferUp: " <> s
   pure []
 
 createMail :: MailAddress -> Text -> Mail () ()
@@ -84,6 +82,14 @@ diffListings :: Site -> [Listing] -> [Listing] -> [Listing]
 diffListings _ [] _ = []
 diffListings _ _ [] = []
 diffListings _ a b = b \\ a
+
+-- "https://www.ksl.com/classifieds/listing/id-of-listing"
+getMailContent :: Site -> [Listing] -> Text
+getMailContent Ksl listings = foldr (\a b -> a <> b <> " <br>\n ") "" $ fmap f listings
+  where f (KslListing id _ _ _ _ _ _ _ price title _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) = "https://ksl.com/classifieds/listing/" <> pack (show id) <> " <br>\n " <> title <> " <br>\n " <> pack (show price)
+getMailContent FacebookMarketplace _ = "Facebook Marketplace Content"
+getMailContent LetGo _ = "LetGo Content"
+getMailContent OfferUp _ = "OfferUp Content"
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
@@ -100,9 +106,22 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   newLgListings <- liftIO $ handleSites LetGo $ SearchTerm "arcade"
 
   -- Collect the diff listings into email content
-  liftIO $ putStrLn "New Ksl Listings: "
-  liftIO $ print $ diffListings Ksl oldKslListings newKslListings
-  -- statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr "This is the content")
+  -- liftIO $ putStrLn "New Ksl Listings: "
+  -- liftIO $ print $ diffListings Ksl oldKslListings newKslListings
+  let diffKsl = diffListings Ksl oldKslListings newKslListings
+  let kslContent = getMailContent Ksl diffKsl
+  case diffKsl of
+    [] -> liftIO $ print "No changes."
+    x -> liftIO $ do
+      print "Old Listings: "
+      print oldKslListings
+      print "New Listings: "
+      print newKslListings
+      print "Diff Listings: "
+      print diffKsl
+      print kslContent
+
+  -- statusCode <- liftIO $ sendMail sendgridApiKey (createMail mailAddr kslContent)
 
   put $ unions [ singleton Ksl newKslListings
                , singleton FacebookMarketplace newFbmpListings
@@ -126,7 +145,6 @@ initialState = unions [ singleton Ksl []
 
 main :: IO ()
 main = do
-  _ <- loadFile defaultConfig
   let combine key pn = [key, fmap (<> "@txt.att.net") pn]
   vars <- lookupEnv "SENDGRID_API_KEY" >>= (\key -> combine key <$> lookupEnv "PHONE_NUMBER")
   let env = fmap pack <$> sequence vars

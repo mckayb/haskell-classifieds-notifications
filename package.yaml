@@ -36,7 +36,6 @@ dependencies:
   - transformers
   - unordered-containers
   - sendgrid-v3
-  - dotenv
   - hashable
 
 executables:

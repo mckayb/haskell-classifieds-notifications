@@ -40,6 +40,17 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps: ["sendgrid-v3-0.1.0.0"]
 
+docker:
+  enable: true
+  run-args: ["--env-file=./.env"]
+
+image:
+  containers:
+    - base: "fpco/stack-build"
+      name: "hcn"
+      entrypoints:
+      - haskell-classifieds-notifications
+
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

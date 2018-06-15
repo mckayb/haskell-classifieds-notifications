@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b9a678e9b9f05dc117734ea6c54b3a555e6521051425d94a290c3880d8dee62b
+-- hash: 9dec2db50783baae922981da5270df67cdb7963cd409ebcd01a54b12767dc874
 
 name:           haskell-classifieds-notifications
 version:        0.1.0.0
@@ -31,7 +31,6 @@ executable haskell-classifieds-notifications
       aeson
     , base >=4.7 && <5
     , bytestring
-    , dotenv
     , hashable
     , lens
     , sendgrid-v3
