@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, print, putStrLn, pure, sequence, fmap, foldr, show, (>), (<$>), ($), (>>=), (*), (=<<), (/=), (.), (&&))
+import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&))
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
@@ -25,12 +25,16 @@ import Data.Hashable (Hashable)
 import GHC.Generics (Generic)
 
 newtype SearchTerm = SearchTerm Text
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+instance Hashable SearchTerm
 
 data Site = Ksl | FacebookMarketplace | LetGo | OfferUp
   deriving (Show, Eq, Generic)
-
 instance Hashable Site
+
+type SiteSearchTuple = (Site, SearchTerm)
+
+type AnotherTest = HashMap SiteSearchTuple [Listing]
 
 type ListingsMap = HashMap Site [Listing]
 type Environment = (ApiKey, MailAddress)
@@ -95,7 +99,7 @@ getMailContent FacebookMarketplace _ = "Facebook Marketplace Content"
 getMailContent LetGo _ = "LetGo Content"
 getMailContent OfferUp _ = "OfferUp Content"
 
-getListings :: Environment -> StateT ListingsMap IO ListingsMap
+{- getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
   prevListings <- get
 
@@ -126,16 +130,44 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   let oneSecond = 1000000
 
   -- Check every 30 seconds
-  liftIO $ threadDelay $ oneSecond * 30
+  liftIO $ threadDelay $ oneSecond * 30 -}
 
-initialState :: ListingsMap
+{- initialState :: ListingsMap
 initialState = unions [ singleton Ksl []
                       , singleton FacebookMarketplace []
                       , singleton OfferUp []
                       , singleton LetGo []
-                      ]
+                      ] -}
 
--- phone#@txt.att.net
+getListings2 :: Environment -> StateT AnotherTest IO AnotherTest
+getListings2 (sendgridApiKey, mailAddr) = forever $ do
+  prevListings <- get
+
+  results <- liftIO $ mapM g activeSiteSearchTuple
+
+  -- Now, get the diff of the results and send an email if applicable.
+  -- Then, put the new results into the state, wait 30 seconds and do it again
+  liftIO $ print results
+
+  liftIO $ threadDelay $ oneSecond * 30
+  where
+    g :: SiteSearchTuple -> IO (Site, SearchTerm, [Listing])
+    g (s, s') = (\x -> (s, s', x)) <$> handleSites s s'
+
+    oneSecond :: Int
+    oneSecond = 1000000
+
+activeSites :: [Site]
+activeSites = [Ksl, FacebookMarketplace, OfferUp, LetGo]
+
+activeSearchTerms :: [SearchTerm]
+activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
+
+activeSiteSearchTuple :: [SiteSearchTuple]
+activeSiteSearchTuple = fmap (,) activeSites <*> activeSearchTerms
+
+initialState2 :: AnotherTest
+initialState2 = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
 
 main :: IO ()
 main = do
@@ -148,7 +180,8 @@ main = do
       exitFailure
     Just [apiKey, email] -> do
       let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder")
-      _ <- runStateT (getListings massagedEnv) initialState
+      -- _ <- runStateT (getListings massagedEnv) initialState
+      _ <- runStateT (getListings2 massagedEnv) initialState2
       exitSuccess
     Just _ -> do
       putStrLn "Environment not set properly."
