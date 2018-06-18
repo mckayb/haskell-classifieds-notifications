@@ -85,11 +85,11 @@ createMail addr content = mail to' from' subject' content'
     content' = fromList [mailContentText content]
     to' = [personalization (fromList [addr])]
 
-diffListings :: Site -> [Listing] -> [Listing] -> [Listing]
+diffListings :: [Listing] -> [Listing] -> [Listing]
 -- If one of these is empty, then something has gone wrong, or it's the first call, so we can't get a good diff
-diffListings _ [] _ = []
-diffListings _ _ [] = []
-diffListings _ a b = b \\ a
+diffListings [] _ = []
+diffListings _ [] = []
+diffListings a b = b \\ a
 
 -- "https://www.ksl.com/classifieds/listing/id-of-listing"
 getMailContent :: Site -> [Listing] -> Text
@@ -143,7 +143,7 @@ getListings2 :: Environment -> StateT AnotherTest IO AnotherTest
 getListings2 (sendgridApiKey, mailAddr) = forever $ do
   prevListings <- get
 
-  results <- liftIO $ mapM g activeSiteSearchTuple
+  results <- liftIO $ mapM (group prevListings) activeSiteSearchTuple
 
   -- Now, get the diff of the results and send an email if applicable.
   -- Then, put the new results into the state, wait 30 seconds and do it again
@@ -151,8 +151,8 @@ getListings2 (sendgridApiKey, mailAddr) = forever $ do
 
   liftIO $ threadDelay $ oneSecond * 30
   where
-    g :: SiteSearchTuple -> IO (Site, SearchTerm, [Listing])
-    g (s, s') = (\x -> (s, s', x)) <$> handleSites s s'
+    group :: AnotherTest -> SiteSearchTuple -> IO (Site, SearchTerm, [Listing], [Listing])
+    group p (s, s') =  (\x -> (s, s', p ! (s, s'), diffListings (p ! (s, s')) x)) <$> handleSites s s'
 
     oneSecond :: Int
     oneSecond = 1000000
