@@ -34,9 +34,9 @@ instance Hashable Site
 
 type SiteSearchTuple = (Site, SearchTerm)
 
-type AnotherTest = HashMap SiteSearchTuple [Listing]
+type ListingsMap = HashMap SiteSearchTuple [Listing]
 
-type ListingsMap = HashMap Site [Listing]
+-- type ListingsMap = HashMap Site [Listing]
 type Environment = (ApiKey, MailAddress)
 
 -- https://www.ebay.com/sch/i.html?_from=R40&_nkw=arcade&_sacat=0&_trksid=p2380057.m570.l1313.TR10.TRC2.A0.H0.Xarcade.TRS2
@@ -65,17 +65,9 @@ handleSites Ksl (SearchTerm s) = do
       putStrLn "Couldn't find response body!"
       pure []
 
-handleSites FacebookMarketplace (SearchTerm _) = do
-  -- print $ "Checking Facebook Marketplace: " <> s
-  pure []
-
-handleSites LetGo (SearchTerm _) = do
-  -- print $ "Checking LetGo: " <> s
-  pure []
-
-handleSites OfferUp (SearchTerm _) = do
-  -- print $ "Checking OfferUp: " <> s
-  pure []
+handleSites FacebookMarketplace (SearchTerm _) = pure []
+handleSites LetGo (SearchTerm _) = pure []
+handleSites OfferUp (SearchTerm _) = pure []
 
 createMail :: MailAddress -> Text -> Mail () ()
 createMail addr content = mail to' from' subject' content'
@@ -93,66 +85,34 @@ diffListings a b = b \\ a
 
 -- "https://www.ksl.com/classifieds/listing/id-of-listing"
 getMailContent :: Site -> [Listing] -> Text
-getMailContent Ksl listings = foldr (<>) "\n" $ fmap f listings
-  where f (KslListing id _ _ _ _ _ _ _ price title _ _ _ _ _ _ name homePhone _ _ _ _ _ _ _ _ _ _ _ _) = title <> "\n" <> pack (show price) <> "\n" <> "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> name <> "\n" <> homePhone <> "\n"
-getMailContent FacebookMarketplace _ = "Facebook Marketplace Content"
-getMailContent LetGo _ = "LetGo Content"
-getMailContent OfferUp _ = "OfferUp Content"
+getMailContent Ksl listings = foldr (<>) "" $ fmap f listings
+  where f (KslListing id price title _ name homePhone) = title <> "\n" <> pack (show price) <> "\n" <> "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> name <> "\n" <> homePhone <> "\n"
+getMailContent FacebookMarketplace _ = ""
+getMailContent LetGo _ = ""
+getMailContent OfferUp _ = ""
 
-{- getListings :: Environment -> StateT ListingsMap IO ListingsMap
+getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
-  prevListings <- get
-
-  let oldKslListings = prevListings ! Ksl
-  -- let oldFbmpListings = prevListings ! FacebookMarketplace
-  -- let oldOuListings = prevListings ! OfferUp
-  -- let oldLgListings = prevListings ! LetGo
-
-  newKslListings <- liftIO $ handleSites Ksl $ SearchTerm "game"
-  newFbmpListings <- liftIO $ handleSites FacebookMarketplace $ SearchTerm "game"
-  newOuListings <- liftIO $ handleSites OfferUp $ SearchTerm "game"
-  newLgListings <- liftIO $ handleSites LetGo $ SearchTerm "game"
-
-  -- Collect the diff listings into email content
-  let diffKsl = diffListings Ksl oldKslListings newKslListings
-  let kslContent = getMailContent Ksl diffKsl
-
-  liftIO $ when (length kslContent > 1) $ do
-    statusCode <- sendMail sendgridApiKey (createMail mailAddr kslContent)
-    print ("Sent email: " <> show statusCode)
-
-  put $ unions [ singleton Ksl newKslListings
-               , singleton FacebookMarketplace newFbmpListings
-               , singleton OfferUp newOuListings
-               , singleton LetGo newLgListings
-               ]
-
-  let oneSecond = 1000000
-
-  -- Check every 30 seconds
-  liftIO $ threadDelay $ oneSecond * 30 -}
-
-{- initialState :: ListingsMap
-initialState = unions [ singleton Ksl []
-                      , singleton FacebookMarketplace []
-                      , singleton OfferUp []
-                      , singleton LetGo []
-                      ] -}
-
-getListings2 :: Environment -> StateT AnotherTest IO AnotherTest
-getListings2 (sendgridApiKey, mailAddr) = forever $ do
   prevListings <- get
 
   results <- liftIO $ mapM (group prevListings) activeSiteSearchTuple
 
-  -- Now, get the diff of the results and send an email if applicable.
-  -- Then, put the new results into the state, wait 30 seconds and do it again
-  liftIO $ print results
+  let diffContent = foldr (\(s, _, _, diff) prev -> prev <> getMailContent s diff) "" results
+  let newListings = unions $ foldr (\(s, s', new, _) prev -> prev <> [singleton (s, s') new]) [] results
+
+  liftIO $ when (length diffContent > 1) $ do
+      statusCode <- sendMail sendgridApiKey (createMail mailAddr diffContent)
+      print ("Sent email: " <> show statusCode)
+
+  put newListings
 
   liftIO $ threadDelay $ oneSecond * 30
   where
-    group :: AnotherTest -> SiteSearchTuple -> IO (Site, SearchTerm, [Listing], [Listing])
-    group p (s, s') =  (\x -> (s, s', p ! (s, s'), diffListings (p ! (s, s')) x)) <$> handleSites s s'
+    group :: ListingsMap -> SiteSearchTuple -> IO (Site, SearchTerm, [Listing], [Listing])
+    group p (s, s') =  do
+      new <- handleSites s s'
+      let old = p ! (s, s')
+      pure (s, s', new, diffListings old new)
 
     oneSecond :: Int
     oneSecond = 1000000
@@ -166,8 +126,8 @@ activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
 activeSiteSearchTuple :: [SiteSearchTuple]
 activeSiteSearchTuple = fmap (,) activeSites <*> activeSearchTerms
 
-initialState2 :: AnotherTest
-initialState2 = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
+initialState :: ListingsMap
+initialState = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
 
 main :: IO ()
 main = do
@@ -180,8 +140,7 @@ main = do
       exitFailure
     Just [apiKey, email] -> do
       let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder")
-      -- _ <- runStateT (getListings massagedEnv) initialState
-      _ <- runStateT (getListings2 massagedEnv) initialState2
+      _ <- runStateT (getListings massagedEnv) initialState
       exitSuccess
     Just _ -> do
       putStrLn "Environment not set properly."
