@@ -36,7 +36,6 @@ type SiteSearchTuple = (Site, SearchTerm)
 
 type ListingsMap = HashMap SiteSearchTuple [Listing]
 
--- type ListingsMap = HashMap Site [Listing]
 type Environment = (ApiKey, MailAddress)
 
 -- https://www.ebay.com/sch/i.html?_from=R40&_nkw=arcade&_sacat=0&_trksid=p2380057.m570.l1313.TR10.TRC2.A0.H0.Xarcade.TRS2

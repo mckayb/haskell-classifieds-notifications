@@ -1,8 +1,8 @@
 module Types.Ksl where
 
-import Prelude (Int, Float, Maybe, Bool, Show, Eq, (==), (&&), (<*>), (<$>), ($))
+import Prelude (Int, Float, Show, Eq)
 import GHC.Generics (Generic)
-import Data.Aeson (FromJSON(parseJSON), withObject, (.:))
+import Data.Aeson (FromJSON)
 import Data.Text (Text)
 
 data Listing =
