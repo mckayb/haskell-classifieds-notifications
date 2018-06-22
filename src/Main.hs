@@ -10,7 +10,7 @@ import Data.HashMap.Lazy (HashMap, singleton, unions, (!))
 import Data.Semigroup ((<>))
 import Data.List (find, (\\))
 import Data.List.NonEmpty (fromList)
-import Data.Text (Text, length, pack)
+import Data.Text (Text, length, pack, unpack)
 import Data.Aeson (decode)
 import Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Char8 (ByteString, takeWhile, dropWhile, isInfixOf, init, pack)
@@ -28,7 +28,7 @@ newtype SearchTerm = SearchTerm Text
   deriving (Show, Eq, Generic)
 instance Hashable SearchTerm
 
-data Site = Ksl | FacebookMarketplace | LetGo | OfferUp
+data Site = Ksl | FacebookMarketplace | LetGo | OfferUp | CraigsList Text
   deriving (Show, Eq, Generic)
 instance Hashable Site
 
@@ -67,6 +67,25 @@ handleSites Ksl (SearchTerm s) = do
 handleSites FacebookMarketplace (SearchTerm _) = pure []
 handleSites LetGo (SearchTerm _) = pure []
 handleSites OfferUp (SearchTerm _) = pure []
+handleSites (CraigsList subdomain) (SearchTerm s) = do
+  let opts = defaults & param (pack "query") .~ [s]
+  r <- getWith opts $ "https://" <> unpack subdomain <> ".craigslist.org/search/sss"
+  let maybeBody = r ^? responseBody
+  case maybeBody of
+    Just body -> do
+      -- print body
+      print $ parseTags (toStrict body)
+      -- let listingTagText = find (\x -> isTagText x && isListingsTag x) $ parseTags (toStrict body)
+      -- print listingTagText
+      -- let maybeListingText = maybeTagText =<< listingTagText
+      -- print maybeListingText
+      pure []
+    Nothing -> do
+      putStrLn "Couldn't find response body!"
+      pure []
+  -- print $ "Hitting Craigslist: " <> subdomain
+  -- print s
+  -- pure []
 
 createMail :: MailAddress -> Text -> Mail () ()
 createMail addr content = mail to' from' subject' content'
@@ -89,6 +108,7 @@ getMailContent Ksl listings = foldr (<>) "" $ fmap f listings
 getMailContent FacebookMarketplace _ = ""
 getMailContent LetGo _ = ""
 getMailContent OfferUp _ = ""
+getMailContent (CraigsList _) _ = ""
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
@@ -123,7 +143,10 @@ activeSearchTerms :: [SearchTerm]
 activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
 
 activeSiteSearchTuple :: [SiteSearchTuple]
-activeSiteSearchTuple = fmap (,) activeSites <*> activeSearchTerms
+activeSiteSearchTuple = (fmap (,) activeSites <*> activeSearchTerms)
+  <> [(CraigsList "saltlakecity", SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
+  <> [(CraigsList "saltlakecity", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
+  <> [(CraigsList "saltlakecity", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
 
 initialState :: ListingsMap
 initialState = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
@@ -134,13 +157,10 @@ main = do
   vars <- lookupEnv "SENDGRID_API_KEY" >>= (\key -> combine key <$> lookupEnv "PHONE_NUMBER")
   let env = fmap pack <$> sequence vars
   case env of
-    Nothing -> do
-      putStrLn "Environment not set properly."
-      exitFailure
     Just [apiKey, email] -> do
       let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder")
       _ <- runStateT (getListings massagedEnv) initialState
       exitSuccess
-    Just _ -> do
+    _ -> do
       putStrLn "Environment not set properly."
       exitFailure
