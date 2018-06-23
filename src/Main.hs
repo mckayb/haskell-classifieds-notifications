@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==))
+import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==))
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
@@ -8,7 +8,7 @@ import Control.Monad.Trans.State.Lazy (StateT, runStateT, get, put)
 import Control.Concurrent (threadDelay)
 import Data.HashMap.Lazy (HashMap, singleton, unions, (!))
 import Data.Semigroup ((<>))
-import Data.List (find, (\\), takeWhile)
+import Data.List (find, (\\), takeWhile, dropWhile)
 import Data.List.NonEmpty (fromList)
 import Data.Text (Text, length, pack, unpack)
 import Data.Aeson (decode)
@@ -16,7 +16,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack)
 import Data.ByteString.Lazy (fromStrict, toStrict)
 import Network.Wreq (getWith, defaults, param, responseBody)
-import Text.HTML.TagSoup (Tag(TagText), maybeTagText, parseTags, isTagText, partitions, sections, (~==), (~/=))
+import Text.HTML.TagSoup (Tag(TagText, TagOpen), maybeTagText, parseTags, isTagText, partitions, sections, (~==), (~/=))
 import Types.Ksl (Listing(KslListing))
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure, exitSuccess)
@@ -77,14 +77,27 @@ handleSites (CraigsList subdomain) (SearchTerm s) = do
       let parts = partitions (~== unpack "<p class='result-info'>") tags
       let resultArrHtml = fmap (takeWhile (~/= unpack "</li>")) parts
 
+      let prices = fmap (fmap maybeTagText . filter isTagText . takeWhile (~/= unpack "</span>") . dropWhile (~/= unpack "<span class='result-price'>")) resultArrHtml
+      let titlesAndLinks = fmap (sequence . fmap parseLinkAndTitle . takeWhile (~/= unpack "</a>") . dropWhile (~/= unpack "<a class='result-title hdrlnk'>")) resultArrHtml
+      let locations = fmap (fmap maybeTagText . filter isTagText . takeWhile (~/= unpack "</span>") . dropWhile (~/= unpack "<span class='result-hood'>")) resultArrHtml
+
+      print prices
+      print titlesAndLinks
+      print locations
+
       -- Pull price from <span class='result-price'>$PRICE</span>
       -- Pull title and link from <a class='result-title' href='the-link'>TITLE</a>
       -- Pull location from <span class='result-hood'>LOCATION</span>
-      print resultArrHtml
+      -- print resultArrHtml
       pure []
     Nothing -> do
       putStrLn "Couldn't find response body!"
       pure []
+  where
+    parseLinkAndTitle :: Tag BS.ByteString -> Maybe BS.ByteString
+    parseLinkAndTitle (TagOpen "a" (("href", a):_)) = Just a
+    parseLinkAndTitle (TagText a) = Just a
+    parseLinkAndTitle _ = Nothing
 
 createMail :: MailAddress -> Text -> Mail () ()
 createMail addr content = mail to' from' subject' content'
