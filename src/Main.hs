@@ -1,6 +1,6 @@
 module Main where
 
-import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==))
+import Prelude (Show, Eq, Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, zipWith, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==))
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
@@ -11,13 +11,14 @@ import Data.Semigroup ((<>))
 import Data.List (find, (\\), takeWhile, dropWhile)
 import Data.List.NonEmpty (fromList)
 import Data.Text (Text, length, pack, unpack)
-import Data.Aeson (decode)
-import Data.Maybe (fromMaybe)
+import Data.Text.Encoding (decodeUtf8)
+import Data.Aeson (decodeStrict)
+import Data.Maybe (fromMaybe, catMaybes)
 import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack)
-import Data.ByteString.Lazy (fromStrict, toStrict)
+import Data.ByteString.Lazy (toStrict)
 import Network.Wreq (getWith, defaults, param, responseBody)
-import Text.HTML.TagSoup (Tag(TagText, TagOpen), maybeTagText, parseTags, isTagText, partitions, sections, (~==), (~/=))
-import Types.Ksl (Listing(KslListing))
+import Text.HTML.TagSoup (Tag(TagText, TagOpen), maybeTagText, parseTags, isTagText, partitions, (~==), (~/=))
+import Types.Listings (Listing(KslListing, CraigsListListing))
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure, exitSuccess)
 import Network.SendGridV3.Api (ApiKey(ApiKey) , MailAddress(MailAddress) , Mail , sendMail , personalization , mail , mailContentText)
@@ -54,7 +55,7 @@ handleSites Ksl (SearchTerm s) = do
                                    . BS.takeWhile (/= '\n') 
                                    . BS.dropWhile (/= '[')
                                    ) maybeListingText
-      let mListings = (decode =<< fmap fromStrict maybeListingsJson) :: Maybe [Listing]
+      let mListings = (decodeStrict =<< maybeListingsJson) :: Maybe [Listing]
       pure $ fromMaybe [] mListings
     Nothing -> do
       putStrLn "Couldn't find response body!"
@@ -76,24 +77,29 @@ handleSites (CraigsList subdomain) (SearchTerm s) = do
       let tags = parseTags (toStrict body)
       let parts = partitions (~== unpack "<p class='result-info'>") tags
       let resultArrHtml = fmap (takeWhile (~/= unpack "</li>")) parts
-
-      let prices = fmap (fmap maybeTagText . filter isTagText . takeWhile (~/= unpack "</span>") . dropWhile (~/= unpack "<span class='result-price'>")) resultArrHtml
-      let titlesAndLinks = fmap (sequence . fmap parseLinkAndTitle . takeWhile (~/= unpack "</a>") . dropWhile (~/= unpack "<a class='result-title hdrlnk'>")) resultArrHtml
-      let locations = fmap (fmap maybeTagText . filter isTagText . takeWhile (~/= unpack "</span>") . dropWhile (~/= unpack "<span class='result-hood'>")) resultArrHtml
-
-      print prices
-      print titlesAndLinks
-      print locations
-
-      -- Pull price from <span class='result-price'>$PRICE</span>
-      -- Pull title and link from <a class='result-title' href='the-link'>TITLE</a>
-      -- Pull location from <span class='result-hood'>LOCATION</span>
-      -- print resultArrHtml
-      pure []
+      let prices = fmap ( fmap maybeTagText
+                        . filter isTagText
+                        . takeWhile (~/= unpack "</span>")
+                        . dropWhile (~/= unpack "<span class='result-price'>")
+                        ) resultArrHtml
+      let titlesAndLinks = fmap ( fmap parseLinkAndTitle 
+                                . takeWhile (~/= unpack "</a>")
+                                . dropWhile (~/= unpack "<a class='result-title hdrlnk'>")
+                                ) resultArrHtml
+      pure $ catMaybes $ toCraigsListListing . sequence <$> zipWith handleUnknown prices titlesAndLinks
     Nothing -> do
       putStrLn "Couldn't find response body!"
       pure []
   where
+    handleUnknown :: [Maybe BS.ByteString] -> [Maybe BS.ByteString] -> [Maybe BS.ByteString]
+    handleUnknown [] a = [Just "$Unknown"] <> a
+    handleUnknown _ [] = []
+    handleUnknown a b = a <> b
+
+    toCraigsListListing :: Maybe [BS.ByteString] -> Maybe Listing
+    toCraigsListListing (Just [price, url, title]) = Just $ CraigsListListing (decodeUtf8 url) (decodeUtf8 title) (decodeUtf8 price)
+    toCraigsListListing _ = Nothing
+
     parseLinkAndTitle :: Tag BS.ByteString -> Maybe BS.ByteString
     parseLinkAndTitle (TagOpen "a" (("href", a):_)) = Just a
     parseLinkAndTitle (TagText a) = Just a
@@ -116,7 +122,9 @@ diffListings a b = b \\ a
 -- "https://www.ksl.com/classifieds/listing/id-of-listing"
 getMailContent :: Site -> [Listing] -> Text
 getMailContent Ksl listings = foldr (<>) "" $ fmap f listings
-  where f (KslListing id price title _ name homePhone) = title <> "\n" <> pack (show price) <> "\n" <> "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> name <> "\n" <> homePhone <> "\n"
+  where
+    f (KslListing id price title _ name homePhone) = title <> "\n" <> pack (show price) <> "\n" <> "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> name <> "\n" <> homePhone <> "\n"
+    f (CraigsListListing url title price) = title <> "\n" <> url <> "\n" <> price <> "\n"
 getMailContent FacebookMarketplace _ = ""
 getMailContent LetGo _ = ""
 getMailContent OfferUp _ = ""
@@ -132,8 +140,10 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   let newListings = unions $ foldr (\(s, s', new, _) prev -> prev <> [singleton (s, s') new]) [] results
 
   liftIO $ when (length diffContent > 1) $ do
-      statusCode <- sendMail sendgridApiKey (createMail mailAddr diffContent)
-      print ("Sent email: " <> show statusCode)
+    statusCode <- sendMail sendgridApiKey (createMail mailAddr diffContent)
+    print ("Sent email: " <> show statusCode)
+
+  liftIO $ when (length diffContent == 0) $ putStrLn "No Results yet..."
 
   put newListings
 
@@ -149,8 +159,7 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
     oneSecond = 1000000
 
 activeSites :: [Site]
--- activeSites = [Ksl, FacebookMarketplace, OfferUp, LetGo]
-activeSites = [FacebookMarketplace, OfferUp, LetGo]
+activeSites = [Ksl, FacebookMarketplace, OfferUp, LetGo]
 
 activeSearchTerms :: [SearchTerm]
 activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
@@ -158,8 +167,11 @@ activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
 activeSiteSearchTuple :: [SiteSearchTuple]
 activeSiteSearchTuple = (fmap (,) activeSites <*> activeSearchTerms)
   <> [(CraigsList "saltlakecity", SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
-  -- <> [(CraigsList "saltlakecity", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
-  -- <> [(CraigsList "saltlakecity", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
+  <> [(CraigsList "saltlakecity", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
+  <> [(CraigsList "saltlakecity", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
+  <> [(CraigsList "stgeorge", SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
+  <> [(CraigsList "stgeorge", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
+  <> [(CraigsList "stgeorge", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
 
 initialState :: ListingsMap
 initialState = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
