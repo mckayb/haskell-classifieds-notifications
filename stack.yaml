@@ -46,8 +46,8 @@ docker:
 
 image:
   containers:
-    - base: "fpco/ubuntu-with-libgmp"
-      name: "hcn"
+    - base: fpco/ubuntu-with-libgmp
+      name: hcn
       entrypoints:
       - haskell-classifieds-notifications
 
