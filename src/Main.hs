@@ -14,7 +14,7 @@ import Data.Text (Text, length, pack, unpack)
 import Data.Text.Encoding (decodeUtf8)
 import Data.Aeson (decodeStrict)
 import Data.Maybe (fromMaybe, catMaybes)
-import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack)
+import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack, drop)
 import Data.ByteString.Lazy (toStrict)
 import Network.Wreq (getWith, defaults, param, responseBody)
 import Text.HTML.TagSoup (Tag(TagText, TagOpen), maybeTagText, parseTags, isTagText, partitions, (~==), (~/=))
@@ -101,7 +101,7 @@ handleSites (CraigsList (Subdomain sub)) (SearchTerm s) = do
     handleUnknown a b = a <> b
 
     toCraigsListListing :: Maybe [BS.ByteString] -> Maybe Listing
-    toCraigsListListing (Just [price, url, title]) = Just $ CraigsListListing (decodeUtf8 url) (decodeUtf8 title) (decodeUtf8 price)
+    toCraigsListListing (Just [price, url, title]) = Just $ CraigsListListing (decodeUtf8 (BS.drop 8 url)) (decodeUtf8 title) (decodeUtf8 price)
     toCraigsListListing _ = Nothing
 
     parseLinkAndTitle :: Tag BS.ByteString -> Maybe BS.ByteString
