@@ -29,7 +29,11 @@ newtype SearchTerm = SearchTerm Text
   deriving (Show, Eq, Generic)
 instance Hashable SearchTerm
 
-data Site = Ksl | FacebookMarketplace | LetGo | OfferUp | CraigsList Text
+newtype Subdomain = Subdomain Text
+  deriving (Show, Eq, Generic)
+instance Hashable Subdomain
+
+data Site = Ksl | FacebookMarketplace | LetGo | OfferUp | CraigsList Subdomain
   deriving (Show, Eq, Generic)
 instance Hashable Site
 
@@ -68,9 +72,9 @@ handleSites Ksl (SearchTerm s) = do
 handleSites FacebookMarketplace (SearchTerm _) = pure []
 handleSites LetGo (SearchTerm _) = pure []
 handleSites OfferUp (SearchTerm _) = pure []
-handleSites (CraigsList subdomain) (SearchTerm s) = do
+handleSites (CraigsList (Subdomain sub)) (SearchTerm s) = do
   let opts = defaults & param (pack "query") .~ [s]
-  r <- getWith opts $ "https://" <> unpack subdomain <> ".craigslist.org/search/sss"
+  r <- getWith opts $ "https://" <> unpack sub <> ".craigslist.org/search/sss"
   let maybeBody = r ^? responseBody
   case maybeBody of
     Just body -> do
@@ -120,15 +124,11 @@ diffListings _ [] = []
 diffListings a b = b \\ a
 
 -- "https://www.ksl.com/classifieds/listing/id-of-listing"
-getMailContent :: Site -> [Listing] -> Text
-getMailContent Ksl listings = foldr (<>) "" $ fmap f listings
+getMailContent :: [Listing] -> Text
+getMailContent listings = foldr (<>) "" $ fmap f listings
   where
     f (KslListing id price title _ name homePhone) = title <> "\n" <> pack (show price) <> "\n" <> "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> name <> "\n" <> homePhone <> "\n"
     f (CraigsListListing url title price) = title <> "\n" <> url <> "\n" <> price <> "\n"
-getMailContent FacebookMarketplace _ = ""
-getMailContent LetGo _ = ""
-getMailContent OfferUp _ = ""
-getMailContent (CraigsList _) _ = ""
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
@@ -136,7 +136,7 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
 
   results <- liftIO $ mapM (group prevListings) activeSiteSearchTuple
 
-  let diffContent = foldr (\(s, _, _, diff) prev -> prev <> getMailContent s diff) "" results
+  let diffContent = foldr (\(_, _, _, diff) prev -> prev <> getMailContent diff) "" results
   let newListings = unions $ foldr (\(s, s', new, _) prev -> prev <> [singleton (s, s') new]) [] results
 
   liftIO $ when (length diffContent > 1) $ do
@@ -166,12 +166,9 @@ activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
 
 activeSiteSearchTuple :: [SiteSearchTuple]
 activeSiteSearchTuple = (fmap (,) activeSites <*> activeSearchTerms)
-  <> [(CraigsList "saltlakecity", SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
-  <> [(CraigsList "saltlakecity", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
-  <> [(CraigsList "saltlakecity", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
-  <> [(CraigsList "stgeorge", SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
-  <> [(CraigsList "stgeorge", SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
-  <> [(CraigsList "stgeorge", SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
+  <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
+  <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
+  <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
 
 initialState :: ListingsMap
 initialState = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
