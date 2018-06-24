@@ -167,8 +167,6 @@ activeSearchTerms = fmap SearchTerm ["arcade", "pinball"]
 activeSiteSearchTuple :: [SiteSearchTuple]
 activeSiteSearchTuple = (fmap (,) activeSites <*> activeSearchTerms)
   <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "(\"coin op*\"|(upright|standup|coin*|quarter*|taito|bally|midway game|arcade)|coin-op*|coinop|neogeo|\"neo-geo\"|\"neo geo\"|arkade|acade|acrade|arcade|aracade) -wash* -xbox -dry* -tic*")]
-  <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "((pin ball)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|pinbal|pinabll|pinnball|arkade|acade|acrade|arcade|pinball|aracade)")]
-  <> [(CraigsList (Subdomain "saltlakecity"), SearchTerm "((takes quarters)|(coin operated)|(upright game)|(standup game)|(coin game)|coin-op|(coin op)|(quarters game)|coinop|neogeo|neo-geo|(neo geo)|arkade|acade|acrade|arcade|aracade)")]
 
 initialState :: ListingsMap
 initialState = unions $ fmap (\s -> singleton s []) activeSiteSearchTuple
