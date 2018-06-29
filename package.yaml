@@ -37,6 +37,7 @@ dependencies:
   - unordered-containers
   - sendgrid-v3
   - hashable
+  - random
 
 executables:
   haskell-classifieds-notifications:
