@@ -2,7 +2,7 @@ module Main where
 
 import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack, drop)
 
-import Prelude (Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, zipWith, sequence, fmap, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==))
+import Prelude (Bool(True, False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, zipWith, sequence, fmap, read, mapM, foldr, show, (>), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==), (-))
 import Control.Concurrent (threadDelay)
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever, when)
@@ -16,6 +16,9 @@ import Data.Maybe (fromMaybe, catMaybes)
 import Data.Semigroup ((<>))
 import Data.Text (Text, length, pack, unpack)
 import Data.Text.Encoding (decodeUtf8)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format (formatTime, defaultTimeLocale)
+import Data.Time.LocalTime (TimeZone(TimeZone), ZonedTime(ZonedTime), getZonedTime, utcToLocalTime)
 import Data.ByteString.Lazy (toStrict)
 import Network.SendGridV3.Api (ApiKey(ApiKey) , MailAddress(MailAddress) , Mail , sendMail , personalization , mail , mailContentText)
 import Network.Wreq (getWith, defaults, param, responseBody)
@@ -108,6 +111,13 @@ getMailContent listings = foldr (<>) "" $ fmap f listings
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
+  time <- liftIO getCurrentTime
+  let timeZone = TimeZone (60 * (-6)) True "MDT"
+  let zonedTime = utcToLocalTime timeZone time
+  let currentHour = formatTime defaultTimeLocale "%H" time
+
+  -- TODO: only run this during certain hours based off of currentHour
+
   prevListings <- get
 
   results <- liftIO $ mapM (group prevListings) activeSiteSearchTuple
