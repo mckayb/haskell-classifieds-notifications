@@ -2,7 +2,7 @@ module Main where
 
 import qualified Data.ByteString.Char8 as BS (ByteString, takeWhile, dropWhile, isInfixOf, init, pack, drop)
 
-import Prelude (Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, zipWith, sequence, fmap, mapM, otherwise, foldr, show, (||), (>), (<=), (>=), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==), (+))
+import Prelude (Bool(False), Maybe(Just, Nothing), IO, Int, print, putStrLn, pure, filter, zipWith, sequence, fmap, mapM, otherwise, foldr, show, (-), (||), (>), (<=), (>=), (<$>), (<*>), ($), (>>=), (*), (=<<), (/=), (.), (&&), (==), (+))
 import Control.Concurrent (threadDelay)
 import Control.Lens ((.~), (&), (^?))
 import Control.Monad (forever, when)
@@ -19,7 +19,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.ByteString.Lazy (toStrict)
-import Network.SendGridV3.Api (ApiKey(ApiKey) , MailAddress(MailAddress) , Mail , sendMail , personalization , mail , mailContentText)
+import Network.SendGridV3.Api (ApiKey(ApiKey), MailAddress(MailAddress), Mail, sendMail, personalization, mail, mailContentText)
 import Network.Wreq (getWith, defaults, param, responseBody)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure, exitSuccess)
@@ -42,7 +42,11 @@ handleSites Ksl (SearchTerm s) = do
                                    . BS.dropWhile (/= '[')
                                    ) maybeListingText
       let mListings = (decodeStrict =<< maybeListingsJson) :: Maybe [Listing]
-      pure $ fromMaybe [] mListings
+      case mListings of
+        Just listings -> pure listings
+        Nothing -> do
+          putStrLn "Had trouble parsing KSL Listings!"
+          pure []
     Nothing -> do
       putStrLn "Couldn't find response body!"
       pure []
@@ -106,11 +110,12 @@ diffListings a b = b \\ a
 getMailContent :: [Listing] -> Text
 getMailContent listings = foldr (<>) "" $ fmap f listings
   where
-    f (KslListing id price title _ name homePhone) = "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> title <> "\n" <> pack (show price) <> "\n" <> name <> "\n" <> homePhone <> "\n"
+    f (KslListing id price title _ name maybeHomePhone) = "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> title <> "\n" <> pack (show price) <> "\n" <> name <> "\n" <> fromMaybe "" maybeHomePhone <> "\n"
     f (CraigsListListing url title price) = url <> "\n" <> title <> "\n" <> price <> "\n"
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
+  -- If it's the middle of the night, I don't want this bothering me...
   time <- liftIO getCurrentTime
   let currentHourUtc = formatTime defaultTimeLocale "%H" time
   let currentMinutesUtc = formatTime defaultTimeLocale "%M" time
@@ -125,6 +130,13 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
       putStrLn ("Shutting down for the night... Will start back up in " <> show remainingHours <> " hours and " <> show remainingMinutes <> ".")
       threadDelay $ (remainingHours * 60 * 60 * oneSecond) + (remainingMinutes * 60 * oneSecond)
 
+  -- It's not the middle of the night, so let's start checking listings
+  -- The process is simple
+  -- 1) Grab the old listings from the last run
+  -- 2) Go through all of our site search tuples and get all the new listings
+  -- 3) Diff the listings. If there's new ones, then email them to me.
+  -- 4) Set the new listings in the state to compare to in the next cycle.
+  -- 5) Wait 30-60 seconds and then repeat the process
   prevListings <- get
 
   results <- liftIO $ mapM (group prevListings) activeSiteSearchTuple
@@ -136,7 +148,7 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
     statusCode <- sendMail sendgridApiKey (createMail mailAddr diffContent)
     print ("Sent email: " <> show statusCode)
 
-  liftIO $ when (length diffContent == 0) $ putStrLn "No Results yet..."
+  liftIO $ when (length diffContent == 0) $ putStrLn "No new listings yet..."
 
   put newListings
 
@@ -154,7 +166,7 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
     oneSecond :: Int
     oneSecond = 1000000
 
-    getRemainingTime :: Int -> (Int, Int)
+    getRemainingTime :: Int -> Int -> (Int, Int)
     getRemainingTime utcHour utcMinutes
       | utcHour >= 13 || utcHour <= 3 = (0, 0)
       | otherwise = ((utcHour * (-1)) + 12, (utcMinutes - 60) * (-1))
