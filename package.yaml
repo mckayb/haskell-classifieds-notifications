@@ -38,6 +38,7 @@ dependencies:
   - sendgrid-v3
   - hashable
   - random
+  - time
 
 executables:
   haskell-classifieds-notifications:
