@@ -25,7 +25,7 @@ type SiteSearchTuple = (Site, SearchTerm)
 
 type ListingsMap = HashMap SiteSearchTuple [Listing]
 
-type Environment = (ApiKey, MailAddress)
+type Environment = (ApiKey, MailAddress, [SiteSearchTuple])
 
 data Listing =
     KslListing
