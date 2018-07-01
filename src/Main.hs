@@ -114,9 +114,6 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
   time <- liftIO getCurrentTime
   let currentHourUtc = formatTime defaultTimeLocale "%H" time
   let maybeRemaining = getRemainingTime <$> (readMaybe currentHourUtc :: Maybe Int)
-  liftIO $ putStrLn "Im in here"
-  liftIO $ print (readMaybe currentHourUtc :: Maybe Int)
-  liftIO $ print maybeRemaining
 
   case maybeRemaining of
     Nothing -> liftIO $ do
