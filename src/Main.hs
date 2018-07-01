@@ -141,6 +141,7 @@ getListings (sendgridApiKey, mailAddr, siteSearchTuples) = forever $ do
 
   results <- liftIO $ mapM (group prevListings) siteSearchTuples
 
+  -- TODO: Get a better diff of CraigsList results. There's a big problem with it.
   let diffContent = foldr (\(_, _, _, diff) prev -> prev <> getMailContent diff) "" results
   let newListings = unions $ foldr (\(s, s', new, _) prev -> prev <> [singleton (s, s') new]) [] results
 
