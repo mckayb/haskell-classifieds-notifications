@@ -113,16 +113,17 @@ getListings :: Environment -> StateT ListingsMap IO ListingsMap
 getListings (sendgridApiKey, mailAddr) = forever $ do
   time <- liftIO getCurrentTime
   let currentHourUtc = formatTime defaultTimeLocale "%H" time
-  let maybeRemaining = getRemainingTime <$> (readMaybe currentHourUtc :: Maybe Int)
+  let currentMinutesUtc = formatTime defaultTimeLocale "%M" time
+  let maybeRemaining = getRemainingTime <$> (readMaybe currentHourUtc :: Maybe Int) <*> (readMaybe currentMinutesUtc :: Maybe Int)
 
   case maybeRemaining of
     Nothing -> liftIO $ do
       putStrLn "Failed to parse the current time!"
       exitFailure
-    Just 0 -> pure ()
-    Just remainingHours -> liftIO $ do
-      putStrLn ("Shutting down for the night... Will start back up in " <> show remainingHours <> " hours.")
-      threadDelay (remainingHours * 60 * 60)
+    Just (0, 0) -> pure ()
+    Just (remainingHours, remainingMinutes) -> liftIO $ do
+      putStrLn ("Shutting down for the night... Will start back up in " <> show remainingHours <> " hours and " <> show remainingMinutes <> ".")
+      threadDelay $ (remainingHours * 60 * 60 * oneSecond) + (remainingMinutes * 60 * oneSecond)
 
   prevListings <- get
 
@@ -153,10 +154,10 @@ getListings (sendgridApiKey, mailAddr) = forever $ do
     oneSecond :: Int
     oneSecond = 1000000
 
-    getRemainingTime :: Int -> Int
-    getRemainingTime utcHour
-      | utcHour >= 13 || utcHour <= 3 = 0
-      | otherwise = (utcHour * (-1)) + 13
+    getRemainingTime :: Int -> (Int, Int)
+    getRemainingTime utcHour utcMinutes
+      | utcHour >= 13 || utcHour <= 3 = (0, 0)
+      | otherwise = ((utcHour * (-1)) + 12, (utcMinutes - 60) * (-1))
 
 
 activeSites :: [Site]
