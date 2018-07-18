@@ -19,7 +19,7 @@ import Data.Text.Encoding (decodeUtf8)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.ByteString.Lazy (toStrict)
-import Network.SendGridV3.Api (ApiKey(ApiKey), MailAddress(MailAddress), Mail, sendMail, personalization, mail, mailContentText)
+import Network.SendGridV3.Api (ApiKey(ApiKey), MailAddress(MailAddress), Mail, sendMail, personalization, mail, mailContentHtml)
 import Network.Wreq (getWith, defaults, param, responseBody)
 import System.Environment (lookupEnv)
 import System.Exit (exitFailure, exitSuccess)
@@ -37,8 +37,8 @@ handleSites Ksl (SearchTerm s) = do
     Just body -> do
       let listingTagText = find (\x -> isTagText x && isListingsTag x) $ parseTags (toStrict body)
       let maybeListingText = maybeTagText =<< listingTagText
-      let maybeListingsJson = fmap ( BS.init 
-                                   . BS.takeWhile (/= '\n') 
+      let maybeListingsJson = fmap ( BS.init
+                                   . BS.takeWhile (/= '\n')
                                    . BS.dropWhile (/= '[')
                                    ) maybeListingText
       let mListings = (decodeStrict =<< maybeListingsJson) :: Maybe [Listing]
@@ -69,7 +69,7 @@ handleSites (CraigsList (Subdomain sub)) (SearchTerm s) = do
                         . takeWhile (~/= unpack "</span>")
                         . dropWhile (~/= unpack "<span class='result-price'>")
                         ) resultArrHtml
-      let titlesAndLinks = fmap ( fmap parseLinkAndTitle 
+      let titlesAndLinks = fmap ( fmap parseLinkAndTitle
                                 . takeWhile (~/= unpack "</a>")
                                 . dropWhile (~/= unpack "<a class='result-title hdrlnk'>")
                                 ) resultArrHtml
@@ -97,7 +97,7 @@ createMail addr content = mail to' from' subject' content'
   where
     from' = MailAddress "arcade.dealz@gmail.com" "Arcade Finder"
     subject' = "Possible Deals"
-    content' = fromList [mailContentText content]
+    content' = fromList [mailContentHtml content]
     to' = [personalization (fromList [addr])]
 
 diffListings :: [Listing] -> [Listing] -> [Listing]
@@ -110,7 +110,7 @@ diffListings a b = b \\ a
 getMailContent :: [Listing] -> Text
 getMailContent listings = foldr (<>) "" $ fmap f listings
   where
-    f (KslListing id price title _ name maybeHomePhone) = "ksl.com/classifieds/listing/" <> pack (show id) <> "\n" <> title <> "\n" <> pack (show price) <> "\n" <> name <> "\n" <> fromMaybe "" maybeHomePhone <> "\n"
+    f (KslListing id price title _ name maybeHomePhone) = "ksl.com/classifieds/listing/" <> pack (show id) <> "<br/>\n" <> title <> "<br/>\n" <> pack (show price) <> "<br/>\n" <> name <> "<br/>\n" <> fromMaybe "" maybeHomePhone <> "<br/>\n"
     f (CraigsListListing url title price) = url <> "\n" <> title <> "\n" <> price <> "\n"
 
 getListings :: Environment -> StateT ListingsMap IO ListingsMap
@@ -141,7 +141,7 @@ getListings (sendgridApiKey, mailAddr, siteSearchTuples) = forever $ do
 
   results <- liftIO $ mapM (group prevListings) siteSearchTuples
 
-  -- TODO: Get a better diff of CraigsList results. There's a big problem with it.
+  -- TODO: Get a better diff of CraigsList results. There seems to be a problem with it.
   let diffContent = foldr (\(_, _, _, diff) prev -> prev <> getMailContent diff) "" results
   let newListings = unions $ foldr (\(s, s', new, _) prev -> prev <> [singleton (s, s') new]) [] results
 
@@ -173,19 +173,19 @@ getListings (sendgridApiKey, mailAddr, siteSearchTuples) = forever $ do
       | otherwise = ((utcHour * (-1)) + 12, (utcMinutes - 60) * (-1))
 
 environment :: IO (Maybe [String])
-environment = fmap sequence $ sequence $ fmap lookupEnv ["SENDGRID_API_KEY", "PHONE_NUMBER", "CRAIGSLIST_SUBDOMAINS", "CRAIGSLIST_SEARCH_TERMS", "KSL_SEARCH_TERMS"]
+environment = fmap sequence $ sequence $ fmap lookupEnv ["SENDGRID_API_KEY", "EMAIL", "CRAIGSLIST_SUBDOMAINS", "CRAIGSLIST_SEARCH_TERMS", "KSL_SEARCH_TERMS"]
 
 main :: IO ()
 main = do
   maybeEnv <- environment
   let env = fmap pack <$> maybeEnv
   case env of
-    Just [apiKey, phoneNumber, clSubdomains, clSearchTerms, kslSearchTerms] -> do
+    Just [apiKey, email, clSubdomains, clSearchTerms, kslSearchTerms] -> do
       let kslTuples = fmap (,) [Ksl] <*> fmap SearchTerm (split (== ',') kslSearchTerms)
       let clTuples = fmap ((,) . CraigsList . Subdomain) (split (== ',') clSubdomains) <*> fmap SearchTerm (split (== ',') clSearchTerms)
       let siteSearchTuples = kslTuples <> clTuples
       let initialState = unions $ fmap (\s -> singleton s []) siteSearchTuples
-      let massagedEnv = (ApiKey apiKey, MailAddress (phoneNumber <> "@txt.att.net") "Deal Finder", siteSearchTuples)
+      let massagedEnv = (ApiKey apiKey, MailAddress email "Deal Finder", siteSearchTuples)
       _ <- runStateT (getListings massagedEnv) initialState
       exitSuccess
     _ -> do
