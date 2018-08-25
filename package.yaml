@@ -2,11 +2,11 @@ name:                haskell-classifieds-notifications
 version:             0.1.0.0
 #synopsis:
 #description:
-homepage:            https://github.com/githubuser/haskell-classifieds-notifications#readme
+homepage:            https://github.com/mckayb/haskell-classifieds-notifications#readme
 license:             BSD3
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2018 Author name here
+author:              McKay Broderick
+maintainer:          mckay.db@gmail.com
+copyright:           McKay Broderick
 category:            Web
 extra-source-files:
 - README.md
